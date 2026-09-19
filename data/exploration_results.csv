@@ -1,0 +1,9 @@
+name,tc,area,patterns,length,pins,chains,scan_ffs,notes
+Partial1_K10_lowSCOAP_nocap,95.57,7589.668,254,205,3,1,205,K=10 low-SCOAP excluded; no coverage cap
+Partial2_K20_highSCOAP_no_ultra,89.32,11863.187,257,195,3,1,195,K=20 high-SCOAP; no compile_ultra / no coverage cap
+Partial3_K20_lowSCOAP_nocap,91.1,8565.763992,241,195,3,1,205,K=20 low-SCOAP; no coverage cap
+Partial4_K20_lowSCOAP_cov85,85.93,8565.763992,64,195,3,1,195,K=20 low-SCOAP; coverage 85
+Partial5_K20_highSCOAP_cov85,86.68,8564.96247,64,195,3,1,195,K=20 high-SCOAP; coverage 85
+Partial6_K20_lowSCOAP_drop_wr_rd_cov85,86.62,8565.605664,96,195,3,1,195,Also excluded wr_reg/rd_reg; coverage 85
+Partial7_K20_highSCOAP_cov75,75.1,8564.96247,32,195,3,1,195,BEST M; K=20 high-SCOAP; coverage 75
+Partial8_K30_lowSCOAP_nocap,85.98,7518.081823,178,185,3,1,185,K=30 low-SCOAP; no coverage cap

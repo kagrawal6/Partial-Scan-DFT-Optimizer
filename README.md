@@ -1,91 +1,158 @@
-# Partial-Scan Optimization of ITC'99 b14 (Viper Processor)
+# Partial-Scan Optimization — ITC'99 b14 (Viper Processor)
 
-Insert a **partial scan chain** into the ITC'99 `b14` Viper processor so that a composite testability metric **M** is maximized. M trades off stuck-at test coverage (TC), area (A), pattern count (N), and max scan-chain length (L), with pin cost **P = 3** for a single chain.
+Maximize a composite DFT metric **M** on a synthesized processor by inserting a
+**partial scan** chain instead of full scan: keep test coverage high enough,
+cut area and especially pattern count, stay within ATE pin limits (≤ 2 chains).
 
-Full-scan is not the target. The goal is to leave some flip-flops out of scan, keep TC above 40%, and raise M by cutting area and especially pattern count.
+Winning checked-in point (Partial 7): **1 chain**, K=20 FFs off-scan,
+`set_atpg -coverage 75` → TC ≈ 75.1%, N = 32, **M ≈ 2064**.
 
-## Approach
+See [`project_description.md`](project_description.md) for the full write-up.
 
-1. Synthesize `b14` in full-scan mode and dump SCOAP controllability/observability (`CC0`, `CC1`, `CO`) from TetraMAX (`report_primitives -all`). Rank flip-flops by `D = CC0 + CC1 + CO` (easiest to hardest).
-2. Build candidate **K-sets** from both ends of that list (low-SCOAP and high-SCOAP) rather than only the hardest flops.
-3. Always keep coverage-critical flops in scan. Removing `state_reg` or `IR_reg[23]` dropped TC to ~30%.
-4. Do not dump an entire wide register in or out of the chain; sample bits across registers when exploring K.
-5. Sweep K, chain count, `compile_ultra -scan` vs `compile -scan`, and TetraMAX `set_atpg -coverage` until M peaks.
+## Layout
 
-One scan chain always beat two: a second chain raised P more than it reduced N. The largest M gains came from a coverage **cap** in ATPG (fewer patterns) rather than from K alone.
+```
+rtl/b14.vhd                 RTL (ITC'99)
+scripts/                    DC + TetraMAX flow
+  env.tcl                   Library / path setup (SAED32)
+  synthesis_{full,p}scan.tcl
+  tmax_{full,p}scan.tcl
+  nonscan_ff_list.tcl       FFs excluded from scan (K=20)
+  compute_m.py              Metric calculator
+constraints/b14.sdc         Clock / IO constraints
+results/                    Netlists, STIL, patterns
+reports/                    Area / timing / scan reports
+data/exploration_results.csv
+docs/                       Problem statement + design report
+```
 
-Exploration notes and the 8 design points are in [`Agrawal.pdf`](Agrawal.pdf).
+## Requirements
 
-## Winning configuration (Partial 7)
+| Dependency | Role |
+|------------|------|
+| Synopsys Design Vision or `dc_shell` | Synthesis + DFT Compiler scan insertion |
+| Synopsys TetraMAX (`tmax`) | Stuck-at ATPG |
+| SAED32 EDK (LVT) | Standard-cell `.db` + Verilog simulation models |
+| Python 3 | Metric calculator only (`scripts/compute_m.py`) |
 
-| Parameter | Value |
-|---|---|
-| Non-scan FFs (K) | 20 highest-SCOAP flops |
-| Scan style | Multiplexed flip-flop, **1 chain** |
-| Scan FFs / chain length L | 195 |
-| Synthesis | `compile_ultra -scan` then `compile -scan` |
-| ATPG coverage goal | `set_atpg -coverage 75` |
-| TC / A / N / P | 75.1% / ~8565 / 32 / 3 |
-| **M** | **~2064** (best of the explored points) |
+Point the flow at **your** installs with environment variables (required for the library path):
 
-Non-scan cells (plain `DFFARX2_LVT` in the netlist):
+```bash
+export SAED32_ROOT=/path/to/saed32_edk   # must contain lib/stdcell_lvt/...
+export DESIGN_VISION=design_vision       # or absolute path to the binary
+export TMAX=tmax                         # or absolute path to the binary
+# optional if you prefer batch synthesis:
+export DC_SHELL=dc_shell
+```
 
-- `reg1_reg[3]`–`reg1_reg[19]`
-- `B_reg`
-- `d_reg[0]`, `d_reg[1]`
+`SAED32_ROOT` should look like:
 
-`state_reg`, `IR_reg[23]`, `wr_reg`, and `rd_reg` remain in the scan chain.
+```
+$SAED32_ROOT/
+  lib/stdcell_lvt/db_nldm/*.db
+  lib/stdcell_lvt/verilog/saed32nm_lvt.v
+```
 
-DFT ports: `SERIAL_IN`, `SCAN_EN`, `SERIAL_OUT`. Scan clock is `clock` (100 ns period, 45/55 ns pulse). Reset is active-high on `reset`.
-
-## Repository contents
-
-| File | Description |
-|---|---|
-| `synthesis_pscan.tcl` | Design Compiler / DFT Compiler script: compile, exclude K flops, insert 1 scan chain, write netlist + STIL + reports |
-| `tmax_pscan.tcl` | TetraMAX ATPG script: DRC, stuck-at ATPG with coverage 75, write patterns |
-| `b14_pscan.vg` | Synthesized SAED32 LVT partial-scan netlist |
-| `b14_pscan.stil` | Test protocol (scan chain, timing, load/unload) |
-| `b14_pattern_pscan.v` | Binary internal-scan ATPG patterns |
-| `Agrawal.pdf` | Selection rationale and exploration table |
-
-RTL is not in this repo. Synthesis reads `../rtl/b14.vhd` from the CAE working directory below. The SAED32 LVT library path is hardcoded in `tmax_pscan.tcl`.
+`scripts/env.tcl` auto-picks the first available LVT NLDM corner under `db_nldm/`.
+Override the corner by ensuring your preferred `.db` is first among the candidates it searches,
+or edit `CANDIDATE_LIBS` in `scripts/env.tcl`.
 
 ## How to run
 
-Scripts expect to be sourced on the CAE machines from `/filespace/k/kagrawal24/ece553/do_synth` (RTL at `../rtl/b14.vhd`, reports/results written under that directory). Copy or sync this repo’s `.tcl` files there before running.
+Always start from the **project root** so relative paths resolve.
 
-### 1. Synthesis (`synthesis_pscan.tcl`)
-
-```bash
-cd /filespace/k/kagrawal24/ece553/do_synth
-/cae/apps/bin/design_vision
-```
-
-In Design Vision:
-
-```tcl
-source synthesis_pscan.tcl
-```
-
-This writes:
-
-- `results/b14_pscan.vg`, `results/b14_pscan.ddc`, `results/b14_scan_pscan.def`, `results/b14_pscan.stil`
-- `reports/p2/area_b14_pscan.rpt`, `timing_b14_pscan.rpt`, `power_b14_pscan.rpt`, `chain_b14_pscan.rep`, `cell_b14_pscan.rep`
-
-### 2. ATPG (`tmax_pscan.tcl`)
-
-After synthesis finishes:
+### 0. Sanity checks (no Synopsys license needed)
 
 ```bash
-cd /filespace/k/kagrawal24/ece553/do_synth
-/cae/apps/bin/oldver/tmax
+chmod +x run.sh
+./run.sh check
+./run.sh metric
 ```
 
-In TetraMAX:
+### 1. Configure the environment
+
+```bash
+export SAED32_ROOT=/path/to/saed32_edk
+# Ensure design_vision (or dc_shell) and tmax are on PATH, or set:
+export DESIGN_VISION=$(command -v design_vision)
+export TMAX=$(command -v tmax)
+```
+
+### 2. Phase 2 — Partial scan (primary)
+
+**Synthesis**
+
+```bash
+cd /path/to/Partial-Scan-Optimization-b14-Viper-Processor
+design_vision
+# or:  ./run.sh pscan-synth
+```
+
+Inside Design Vision / `dc_shell`:
 
 ```tcl
-source tmax_pscan.tcl
+source scripts/synthesis_pscan.tcl
 ```
 
-This prints the **Uncollapsed Stuck Fault Summary** and **Pattern Summary** in TetraMAX and writes the binary pattern file `b14_pattern_pscan.v`.
+Produces:
+
+- `results/pscan/b14_pscan.vg`
+- `results/pscan/b14_pscan.stil`
+- reports under `reports/pscan/`
+
+**ATPG**
+
+```bash
+tmax
+# or:  ./run.sh pscan-atpg
+```
+
+Inside TetraMAX:
+
+```tcl
+source scripts/tmax_pscan.tcl
+```
+
+Prints the Uncollapsed Stuck Fault Summary and Pattern Summary, and writes
+`results/pscan/b14_pattern_pscan.v`.
+
+Optional coverage exploration (same netlist, different ATPG stop):
+
+```tcl
+set COVERAGE_GOAL 85
+source scripts/tmax_pscan.tcl
+```
+
+**Score M** (use TC / A / N / L from the tool reports):
+
+```bash
+python3 scripts/compute_m.py --tc 75.1 --area 8564.96247 --patterns 32 --length 195 --pins 3
+```
+
+### 3. Phase 1 — Full scan
+
+Same workflow with the full-scan scripts:
+
+```tcl
+# In Design Vision:
+source scripts/synthesis_fullscan.tcl
+
+# In TetraMAX:
+source scripts/tmax_fullscan.tcl
+```
+
+Or `./run.sh fullscan-synth` / `./run.sh fullscan-atpg`. Outputs go to `results/fullscan/`.
+
+Root-level `synthesis_*.tcl` / `tmax_*.tcl` are thin wrappers that source `scripts/`.
+
+## Winning configuration
+
+| Item | Value |
+|------|--------|
+| Non-scan FFs | 20 highest-SCOAP (`scripts/nonscan_ff_list.tcl`) |
+| Chains / pins P | 1 / 3 |
+| Chain length L | 195 |
+| ATPG coverage goal | 75 |
+| TC / N / M | 75.1% / 32 / ~2064 |
+
+Kept in scan (coverage-critical): `state_reg`, `IR_reg[23]`.

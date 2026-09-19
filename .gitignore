@@ -1,0 +1,19 @@
+# Local Synopsys / ATPG scratch
+work/
+*.log
+*.svf
+command.log
+default.svf
+alib-*/
+*_lib/
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Optional regenerated copies (checked-in golden stays under results/)
+# Uncomment if you do not want local regenerations tracked:
+# results/fullscan/
+# reports/
