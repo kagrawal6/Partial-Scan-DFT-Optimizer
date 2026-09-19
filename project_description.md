@@ -17,9 +17,7 @@ Given the ITC'99 **b14** RTL (a Viper processor subset), build two DFT flows:
    test set with TetraMAX.
 2. **Partial scan** — leave some flip-flops off-scan to **maximize** the figure of merit
 
-\[
-M = \frac{\mathrm{TC}}{\left(\frac{A}{K_1}\right)\left(\frac{N}{K_2}\right)\left(\frac{L}{K_3}\right)\left(\frac{P}{K_4}\right)}
-\]
+$M = \frac{\mathrm{TC}}{\left(\frac{A}{K_1}\right)\left(\frac{N}{K_2}\right)\left(\frac{L}{K_3}\right)\left(\frac{P}{K_4}\right)}$
 
 with constants taken from full-scan characteristics:
 
